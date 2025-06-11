@@ -10,7 +10,9 @@ interface NewTierlistModalProps {
   onCreate: (name: string, tiers: TierDef[]) => void;
 }
 
-const S_TIER_COLOUR = '#7b112c'; // deep wine red
+// Default color for S-Tier items.
+// Use a brighter red for a more vibrant appearance.
+const S_TIER_COLOUR = '#ff4d4d';
 
 function rgbToHex(r: number, g: number, b: number): string {
   const toHex = (c: number) => c.toString(16).padStart(2, '0');
