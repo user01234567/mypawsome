@@ -24,6 +24,7 @@ export interface Item {
   id: number;
   tierlist_id: number;
   tier_id: number | null;
+  position: number;
   name: string;
   image_url: string | null;
 }
@@ -61,8 +62,11 @@ export async function fetchItems(id: number): Promise<Item[]> {
   return res.data;
 }
 
-export async function updateItemTier(itemId: number, tierId: number | null) {
-  const res = await api.patch(`/items/${itemId}`, { tier_id: tierId });
+export async function updateItem(
+  itemId: number,
+  data: { tier_id?: number | null; position?: number }
+) {
+  const res = await api.patch(`/items/${itemId}`, data);
   return res.data;
 }
 

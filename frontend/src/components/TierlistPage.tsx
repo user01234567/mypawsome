@@ -5,7 +5,7 @@ import {
   fetchItems,
   Tier,
   Item,
-  updateItemTier,
+  updateItem,
   castVote,
   addItemToTierlist,
 } from '../api';
@@ -83,16 +83,58 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
   // Drag and drop logic
   const onDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
+
     const itemId = parseInt(result.draggableId);
+    const sourceTierId =
+      result.source.droppableId === 'untiered'
+        ? null
+        : parseInt(result.source.droppableId);
     const destTierId =
       result.destination.droppableId === 'untiered'
         ? null
         : parseInt(result.destination.droppableId);
 
-    setItems((prev) =>
-      prev.map((it) => (it.id === itemId ? { ...it, tier_id: destTierId } : it))
+    const destIndex = result.destination.index;
+
+    let updatedItems: ItemWithVotes[] = [];
+    setItems((prev) => {
+      const grouped: Record<string, ItemWithVotes[]> = {};
+      prev.forEach((it) => {
+        const key = (it.tier_id ?? 'untiered').toString();
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(it);
+      });
+
+      const srcKey = (sourceTierId ?? 'untiered').toString();
+      const dstKey = (destTierId ?? 'untiered').toString();
+
+      const [moved] = grouped[srcKey].splice(result.source.index, 1);
+      moved.tier_id = destTierId;
+      grouped[dstKey].splice(destIndex, 0, moved);
+
+      updatedItems = Object.values(grouped).flat();
+
+      const groupedAfter: Record<string, ItemWithVotes[]> = {};
+      updatedItems.forEach((it) => {
+        const key = (it.tier_id ?? 'untiered').toString();
+        if (!groupedAfter[key]) groupedAfter[key] = [];
+        groupedAfter[key].push(it);
+      });
+
+      Object.values(groupedAfter).forEach((list) => {
+        list.forEach((it, idx) => {
+          it.position = idx;
+        });
+      });
+
+      return updatedItems;
+    });
+
+    await Promise.all(
+      updatedItems.map((it) =>
+        updateItem(it.id, { tier_id: it.tier_id, position: it.position })
+      )
     );
-    await updateItemTier(itemId, destTierId);
   };
 
   // Voting logic

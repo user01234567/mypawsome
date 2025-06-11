@@ -1,32 +1,27 @@
 import os
 import time
-import uuid
 from pathlib import Path
-from fastapi import APIRouter, Depends, Request, status
-from fastapi.responses import JSONResponse
-
-from fastapi import UploadFile, File, Form, Depends, HTTPException
-from sqlalchemy import select, insert
-import os
 from uuid import uuid4
-from fastapi.staticfiles import StaticFiles
-from PIL import Image  # <-- Add at the top
+
 from fastapi import (
     FastAPI,
-    HTTPException,
     File,
     UploadFile,
-    Path as FPath,
+    Form,
+    HTTPException,
     Body,
     Depends,
     Request,
+    Path as FPath,
 )
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import JSONResponse, FileResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
-from sqlalchemy import create_engine, text, insert, select
-from authlib.integrations.starlette_client import OAuth
 from fastapi.middleware.cors import CORSMiddleware
-# Import database & models
+from PIL import Image
+from sqlalchemy import create_engine, text, select, insert, func
+from authlib.integrations.starlette_client import OAuth
+
 from database import database, metadata, SYNC_DATABASE_URL
 from models import tierlists, tiers, items, votes
 
@@ -210,7 +205,7 @@ async def upload_image(file: UploadFile = File(...)):
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File is not an image!")
     ext = file.filename.split(".")[-1]
-    unique_name = f"{uuid.uuid4().hex}.{ext}"
+    unique_name = f"{uuid4().hex}.{ext}"
     file_path = UPLOAD_DIR / unique_name
     with open(file_path, "wb") as buffer:
         buffer.write(await file.read())
@@ -317,11 +312,25 @@ async def add_item(
     image_url        = f"/static/images/{original_name}"
     preview_url      = f"/static/images/{preview_name}"
 
+    # Determine position within the tier (or unassigned)
+    max_pos_row = await database.fetch_one(
+        select(func.max(items.c.position)).where(
+            (items.c.tierlist_id == tierlist_id)
+            & (
+                (items.c.tier_id == tier_id)
+                if tier_id is not None
+                else items.c.tier_id.is_(None)
+            )
+        )
+    )
+    next_position = (max_pos_row[0] or -1) + 1
+
     # 4. Insert to DB (add preview_url as a new column if you want)
     new_item_id = await database.execute(
         insert(items).values(
             tierlist_id=tierlist_id,
             tier_id=tier_id,
+            position=next_position,
             name=name,
             image_url=image_url,         # <-- full image
             preview_url=preview_url,     # <-- you need to add this column!
@@ -335,20 +344,43 @@ async def add_item(
 async def get_items(tierlist_id: int = FPath(..., description="ID of the tierlist to fetch items for")):
     if not await database.fetch_one(select(tierlists.c.id).where(tierlists.c.id == tierlist_id)):
         raise HTTPException(status_code=404, detail="Tierlist not found.")
-    rows = await database.fetch_all(select(items).where(items.c.tierlist_id == tierlist_id))
+    rows = await database.fetch_all(
+        select(items)
+        .where(items.c.tierlist_id == tierlist_id)
+        .order_by(items.c.tier_id, items.c.position)
+    )
     return [dict(r) for r in rows]
 
 @app.patch("/items/{item_id}")
-async def update_item_tier(item_id: int = FPath(..., description="ID of the item to move"), payload: dict = Body(...), current_user: dict = Depends(get_current_user)):
+async def update_item(
+    item_id: int = FPath(..., description="ID of the item to update"),
+    payload: dict = Body(...),
+    current_user: dict = Depends(get_current_user),
+):
     row = await database.fetch_one(select(items.c.tierlist_id).where(items.c.id == item_id))
     if not row:
         raise HTTPException(status_code=404, detail="Item not found.")
     tierlist_id = row["tierlist_id"]
     new_tier_id = payload.get("tier_id")
+    new_position = payload.get("position")
+
+    update_data = {}
+
     if new_tier_id is not None:
-        if not await database.fetch_one(select(tiers.c.id).where((tiers.c.id == new_tier_id) & (tiers.c.tierlist_id == tierlist_id))):
+        if not await database.fetch_one(
+            select(tiers.c.id).where(
+                (tiers.c.id == new_tier_id) & (tiers.c.tierlist_id == tierlist_id)
+            )
+        ):
             raise HTTPException(status_code=400, detail="tier_id is invalid for this item.")
-    await database.execute(items.update().where(items.c.id == item_id).values(tier_id=new_tier_id))
+        update_data["tier_id"] = new_tier_id
+
+    if new_position is not None:
+        update_data["position"] = new_position
+
+    if update_data:
+        await database.execute(items.update().where(items.c.id == item_id).values(**update_data))
+
     updated = await database.fetch_one(select(items).where(items.c.id == item_id))
     return dict(updated)
 

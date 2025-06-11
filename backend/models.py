@@ -29,6 +29,7 @@ items = Table(
     Column("id", Integer, primary_key=True, index=True),
     Column("tierlist_id", Integer, ForeignKey("tierlists.id", ondelete="CASCADE")),
     Column("tier_id", Integer, ForeignKey("tiers.id", ondelete="SET NULL"), nullable=True),
+    Column("position", Integer, nullable=False, default=0),
     Column("name", String(100), nullable=False),
     Column("image_url", String(200), nullable=True),
     Column("preview_url", String(200), nullable=True),
