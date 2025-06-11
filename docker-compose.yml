@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: tierlord
+      POSTGRES_PASSWORD: supersecrettofumagic
+      POSTGRES_DB: tierlist
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - tiernet
+
+  backend:
+    container_name: backend_alla
+    build:
+      context: ./backend
+    ports:
+      - "13371:8000"
+    volumes:
+      - ./backend:/app
+      - ./uploads:/app/uploads
+    environment:
+      - UVICORN_RELOAD=True
+      - DATABASE_URL=postgresql+asyncpg://tierlord:supersecrettofumagic@db:5432/tierlist
+      - AUTHENTIK_BASE_URL=https://auth.gebbts.net/application/o/tiere
+      - AUTHENTIK_CLIENT_ID=0lce184RdYlbomPFGzQ3SfmBglBBOkztYBmSV9dF
+      - AUTHENTIK_CLIENT_SECRET=ROYF0sLUXrWPvhoOkc9YJ5miczaXYhFirMCv5UIWaQCJs2UX212GbMENJ4pbo5FYrYjsUDGa88xDpfbOpo9VbmC8a4JdCwvza3P45DtvsiQmxGQUjfAG6NG77jpUGOaC
+      - SESSION_SECRET_KEY=a-very-secret-session-key
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      - db
+    networks:
+      - tiernet
+
+  frontend:
+    container_name: frontend_alla
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - tiernet
+
+volumes:
+  pgdata:
+
+networks:
+  tiernet:
+    driver: bridge
