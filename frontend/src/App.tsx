@@ -58,6 +58,7 @@ function App() {
       <TopbarContext.Provider value={{ setTopbarContent }}>
         <SidebarContext.Provider value={{ openSidebar, closeSidebar }}>
         <div className="app-root">
+
         {/* --- TOP BAR --- */}
         <header className="app-header flex items-center justify-between gap-3 p-4">
           {/* LEFT: Logo */}
@@ -131,6 +132,7 @@ function App() {
         </SidebarContext.Provider>
       </TopbarContext.Provider>
     </SidebarDefaultContext.Provider>
+
   );
 }
 

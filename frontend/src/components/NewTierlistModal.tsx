@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import NewTierlistModal, { TierDef } from './NewTierlistModal';
+import React, { useState } from 'react';
 
 export interface TierDef {
   name: string;
@@ -11,11 +10,61 @@ interface NewTierlistModalProps {
   onCreate: (name: string, tiers: TierDef[]) => void;
 }
 
-const defaultTiers = [
-  { name: 'S-Tier', colour: '#FFD700' },
-  { name: 'A-Tier', colour: '#C0C0C0' },
-  { name: 'B-Tier', colour: '#CD7F32' }
-];
+const S_TIER_COLOUR = '#7b112c'; // deep wine red
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const toHex = (c: number) => c.toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+// Orange -> yellow -> green -> blue
+function gradientColour(index: number, total: number): string {
+  if (total <= 1) return '#ffa500'; // orange
+  const t = index / (total - 1);
+  let start: [number, number, number];
+  let end: [number, number, number];
+  let localT: number;
+
+  if (t <= 1 / 3) {
+    start = [255, 165, 0]; // orange
+    end = [255, 255, 0]; // yellow
+    localT = t * 3;
+  } else if (t <= 2 / 3) {
+    start = [255, 255, 0]; // yellow
+    end = [0, 255, 0]; // green
+    localT = (t - 1 / 3) * 3;
+  } else {
+    start = [0, 255, 0]; // green
+    end = [0, 0, 255]; // blue
+    localT = (t - 2 / 3) * 3;
+  }
+
+  const r = Math.round(start[0] + (end[0] - start[0]) * localT);
+  const g = Math.round(start[1] + (end[1] - start[1]) * localT);
+  const b = Math.round(start[2] + (end[2] - start[2]) * localT);
+  return rgbToHex(r, g, b);
+}
+
+function generateDefaultTiers(): TierDef[] {
+  const result: TierDef[] = [{ name: 'S-Tier', colour: S_TIER_COLOUR }];
+  const gradientCount = 6; // A-F
+  for (let i = 0; i < gradientCount; i++) {
+    const name = `${String.fromCharCode(65 + i)}-Tier`;
+    result.push({ name, colour: gradientColour(i, gradientCount) });
+  }
+  return result;
+}
+
+function applyGradient(tierList: TierDef[]): TierDef[] {
+  if (tierList.length === 0) return tierList;
+  const gradientCount = tierList.length - 1;
+  return tierList.map((t, idx) => {
+    if (idx === 0) return { ...t, colour: S_TIER_COLOUR };
+    return { ...t, colour: gradientColour(idx - 1, gradientCount) };
+  });
+}
+
+const defaultTiers = generateDefaultTiers();
 
 const NewTierlistModal: React.FC<NewTierlistModalProps> = ({ onClose, onCreate }) => {
   const [name, setName] = useState('');
@@ -34,11 +83,13 @@ const NewTierlistModal: React.FC<NewTierlistModalProps> = ({ onClose, onCreate }
   };
 
   const handleAddTier = () => {
-    setTiers([...tiers, { name: '', colour: '#cccccc' }]);
+    const updated = [...tiers, { name: '', colour: '#cccccc' }];
+    setTiers(applyGradient(updated));
   };
 
   const handleRemoveTier = (idx: number) => {
-    setTiers(tiers.filter((_, i) => i !== idx));
+    const updated = tiers.filter((_, i) => i !== idx);
+    setTiers(applyGradient(updated));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
