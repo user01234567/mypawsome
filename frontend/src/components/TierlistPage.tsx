@@ -83,16 +83,40 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
   // Drag and drop logic
   const onDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
+
     const itemId = parseInt(result.draggableId);
+    const sourceTierId =
+      result.source.droppableId === 'untiered'
+        ? null
+        : parseInt(result.source.droppableId);
     const destTierId =
       result.destination.droppableId === 'untiered'
         ? null
         : parseInt(result.destination.droppableId);
 
-    setItems((prev) =>
-      prev.map((it) => (it.id === itemId ? { ...it, tier_id: destTierId } : it))
-    );
-    await updateItemTier(itemId, destTierId);
+    const destIndex = result.destination.index;
+
+    setItems((prev) => {
+      const grouped: Record<string, ItemWithVotes[]> = {};
+      prev.forEach((it) => {
+        const key = (it.tier_id ?? 'untiered').toString();
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(it);
+      });
+
+      const srcKey = (sourceTierId ?? 'untiered').toString();
+      const dstKey = (destTierId ?? 'untiered').toString();
+
+      const [moved] = grouped[srcKey].splice(result.source.index, 1);
+      moved.tier_id = destTierId;
+      grouped[dstKey].splice(destIndex, 0, moved);
+
+      return Object.values(grouped).flat();
+    });
+
+    if (sourceTierId !== destTierId) {
+      await updateItemTier(itemId, destTierId);
+    }
   };
 
   // Voting logic
