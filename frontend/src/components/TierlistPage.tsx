@@ -148,7 +148,11 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
   const handleExport = async () => {
     const el = document.getElementById('tierlist-export');
     if (!el) return;
-    const canvas = await html2canvas(el);
+    const canvas = await html2canvas(el, {
+      useCORS: true,
+      ignoreElements: (element) =>
+        element.classList?.contains('unassigned-sticky-row'),
+    });
     const dataUrl = canvas.toDataURL('image/png');
     const link = document.createElement('a');
     link.href = dataUrl;
@@ -235,6 +239,7 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
                                         src={BACKEND_URL + (it.preview_url || it.image_url)}
                                         alt={it.name}
                                         className="item-image"
+                                        crossOrigin="anonymous"
                                         onClick={() =>
                                           setLightboxImage(BACKEND_URL + it.image_url)
                                         }
@@ -289,6 +294,7 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
                                     src={BACKEND_URL + (it.preview_url || it.image_url)}
                                     alt={it.name}
                                     className="item-image"
+                                    crossOrigin="anonymous"
                                     onClick={() =>
                                       setLightboxImage(BACKEND_URL + it.image_url)
                                     }
@@ -327,6 +333,7 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
             src={lightboxImage}
             alt="Big Preview"
             className="max-h-[90vh] max-w-[90vw] rounded-lg shadow-lg"
+            crossOrigin="anonymous"
             onClick={(e) => e.stopPropagation()}
           />
         </div>
