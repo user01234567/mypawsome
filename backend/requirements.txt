@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+python-multipart
+
+sqlalchemy
+asyncpg
+databases
+psycopg2-binary
+Pillow
+authlib
+python-dotenv
+itsdangerous
+httpx
