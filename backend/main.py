@@ -404,16 +404,40 @@ async def get_items(tierlist_id: int = FPath(..., description="ID of the tierlis
     return [dict(r) for r in rows]
 
 @app.patch("/items/{item_id}")
-async def update_item_tier(item_id: int = FPath(..., description="ID of the item to move"), payload: dict = Body(...), current_user: dict = Depends(get_current_user)):
-    row = await database.fetch_one(select(items.c.tierlist_id).where(items.c.id == item_id))
+async def update_item_tier(
+    item_id: int = FPath(..., description="ID of the item to move"),
+    payload: dict = Body(...),
+    current_user: dict = Depends(get_current_user),
+):
+    row = await database.fetch_one(
+        select(items.c.tierlist_id).where(items.c.id == item_id)
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Item not found.")
+
     tierlist_id = row["tierlist_id"]
+
+    # Ensure the current user is the creator of this tierlist
+    creator_row = await database.fetch_one(
+        select(tierlists.c.creator_id).where(tierlists.c.id == tierlist_id)
+    )
+    if not creator_row:
+        raise HTTPException(status_code=404, detail="Tierlist not found.")
+    if creator_row["creator_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Only the creator can move items.")
+
     new_tier_id = payload.get("tier_id")
     if new_tier_id is not None:
-        if not await database.fetch_one(select(tiers.c.id).where((tiers.c.id == new_tier_id) & (tiers.c.tierlist_id == tierlist_id))):
+        if not await database.fetch_one(
+            select(tiers.c.id).where(
+                (tiers.c.id == new_tier_id) & (tiers.c.tierlist_id == tierlist_id)
+            )
+        ):
             raise HTTPException(status_code=400, detail="tier_id is invalid for this item.")
-    await database.execute(items.update().where(items.c.id == item_id).values(tier_id=new_tier_id))
+
+    await database.execute(
+        items.update().where(items.c.id == item_id).values(tier_id=new_tier_id)
+    )
     updated = await database.fetch_one(select(items).where(items.c.id == item_id))
     return dict(updated)
 
