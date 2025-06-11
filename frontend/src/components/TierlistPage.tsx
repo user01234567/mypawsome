@@ -5,7 +5,7 @@ import {
   fetchItems,
   Tier,
   Item,
-  updateItemTier,
+  updateItem,
   castVote,
   addItemToTierlist,
   getCurrentUser,
@@ -103,6 +103,7 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
 
   // Drag and drop logic
   const onDragEnd = async (result: DropResult) => {
+
     if (!isCreator || !result.destination) return;
 
     const itemId = parseInt(result.draggableId);
@@ -116,6 +117,8 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
         : parseInt(result.destination.droppableId);
 
     const destIndex = result.destination.index;
+
+    let updatedItems: ItemWithVotes[] = [];
 
     setItems((prev) => {
       const grouped: Record<string, ItemWithVotes[]> = {};
@@ -132,12 +135,30 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
       moved.tier_id = destTierId;
       grouped[dstKey].splice(destIndex, 0, moved);
 
-      return Object.values(grouped).flat();
+
+      updatedItems = Object.values(grouped).flat();
+
+      const groupedAfter: Record<string, ItemWithVotes[]> = {};
+      updatedItems.forEach((it) => {
+        const key = (it.tier_id ?? 'untiered').toString();
+        if (!groupedAfter[key]) groupedAfter[key] = [];
+        groupedAfter[key].push(it);
+      });
+
+      Object.values(groupedAfter).forEach((list) => {
+        list.forEach((it, idx) => {
+          it.position = idx;
+        });
+      });
+
+      return updatedItems;
     });
 
-    if (sourceTierId !== destTierId) {
-      await updateItemTier(itemId, destTierId);
-    }
+    await Promise.all(
+      updatedItems.map((it) =>
+        updateItem(it.id, { tier_id: it.tier_id, position: it.position })
+      )
+    );
   };
 
   // Voting logic
