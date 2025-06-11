@@ -12,7 +12,9 @@ import {
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import html2canvas from 'html2canvas';
 import AddItemModal from './AddItemModal';
-import { TopbarContext } from '../App';
+import { TopbarContext, SidebarDefaultContext } from '../App';
+import TierEditorSidebar from './TierEditorSidebar';
+import { createTier, updateTier, deleteTier } from '../api';
 
 interface TierlistPageProps {
   user: any;
@@ -34,6 +36,7 @@ function hexToRgba(hex: string, alpha = 0.15) {
 const BACKEND_URL = "http://192.168.178.249:13371";
 const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
   const { setTopbarContent } = useContext(TopbarContext);
+  const { setDefaultSidebarContent } = useContext(SidebarDefaultContext);
 
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [showAddItem, setShowAddItem] = useState(false);
@@ -130,6 +133,36 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
     setItems(itms.map((it) => ({ ...it, votingEnabled: false })));
     setShowAddItem(false);
   };
+
+  const handleAddTier = async () => {
+    if (!id) return;
+    const newTier = await createTier(Number(id), 'New Tier', '#cccccc');
+    setTiers(prev => [...prev, newTier]);
+  };
+
+  const handleUpdateTier = async (tierId: number, data: { name?: string; colour?: string }) => {
+    const updated = await updateTier(tierId, data);
+    setTiers(prev => prev.map(t => t.id === tierId ? updated : t));
+  };
+
+  const handleDeleteTier = async (tierId: number) => {
+    await deleteTier(tierId);
+    setTiers(prev => prev.filter(t => t.id !== tierId));
+  };
+
+  // Provide tier editing sidebar for the global settings button
+  useEffect(() => {
+    setDefaultSidebarContent(
+      <TierEditorSidebar
+        tiers={tiers}
+        onAdd={handleAddTier}
+        onUpdate={handleUpdateTier}
+        onDelete={handleDeleteTier}
+      />
+    );
+    return () => setDefaultSidebarContent(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tiers]);
 
   return (
     <div className="tierlist-root flex flex-col min-h-screen">

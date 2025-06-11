@@ -10,6 +10,10 @@ export const SidebarContext = createContext({
   closeSidebar: () => {},
 });
 
+export const SidebarDefaultContext = createContext({
+  setDefaultSidebarContent: (_content: React.ReactNode | null) => {},
+});
+
 function SettingsSidebarContent() {
   return (
     <div style={{ padding: "2em 1.5em" }}>
@@ -28,7 +32,9 @@ function App() {
   const [topbarContent, setTopbarContent] = useState<React.ReactNode>("xXSample Text 420_HD");
   const [sidebarContent, setSidebarContent] = useState<React.ReactNode | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-    const openSidebar = (content: React.ReactNode) => {
+  const [defaultSidebarContent, setDefaultSidebarContent] = useState<React.ReactNode | null>(null);
+
+  const openSidebar = (content: React.ReactNode) => {
     setSidebarContent(content);
     setSidebarOpen(true);
   };
@@ -48,8 +54,10 @@ function App() {
   }, [isNeon]);
 
   return (
-    <TopbarContext.Provider value={{ setTopbarContent }}>
-      <div className="app-root">
+    <SidebarDefaultContext.Provider value={{ setDefaultSidebarContent }}>
+      <TopbarContext.Provider value={{ setTopbarContent }}>
+        <SidebarContext.Provider value={{ openSidebar, closeSidebar }}>
+        <div className="app-root">
         {/* --- TOP BAR --- */}
         <header className="app-header flex items-center justify-between gap-3 p-4">
           {/* LEFT: Logo */}
@@ -64,7 +72,7 @@ function App() {
                     if (sidebarOpen) {
                         closeSidebar();
                     } else {
-                        openSidebar(<SettingsSidebarContent />);
+                        openSidebar(defaultSidebarContent ?? <SettingsSidebarContent />);
                     }
                 }}
                 style={{ marginLeft: "0.6em" }}
@@ -120,7 +128,9 @@ function App() {
           <Outlet />
         </main>
       </div>
-    </TopbarContext.Provider>
+        </SidebarContext.Provider>
+      </TopbarContext.Provider>
+    </SidebarDefaultContext.Provider>
   );
 }
 
