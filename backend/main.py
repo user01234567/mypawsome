@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from fastapi import UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy import select, insert, delete, update, text
+import os
 import os entire r
 from uuid import uuid4
 
@@ -24,7 +25,6 @@ from fastapi import (
 from fastapi.responses import JSONResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
-
 from sqlalchemy import create_engine
 from authlib.integrations.starlette_client import OAuth
 from fastapi.middleware.cors import CORSMiddleware

@@ -13,7 +13,8 @@ import {
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import html2canvas from 'html2canvas';
 import AddItemModal from './AddItemModal';
-import { TopbarContext, SidebarContext } from '../App';
+import { TopbarContext, SidebarDefaultContext } from '../App';
+
 import TierEditorSidebar from './TierEditorSidebar';
 import { createTier, updateTier, deleteTier } from '../api';
 
@@ -37,7 +38,8 @@ function hexToRgba(hex: string, alpha = 0.15) {
 const BACKEND_URL = "http://192.168.178.249:13371";
 const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
   const { setTopbarContent } = useContext(TopbarContext);
-  const { openSidebar, closeSidebar } = useContext(SidebarContext);
+  const { setDefaultSidebarContent } = useContext(SidebarDefaultContext);
+
 
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [showAddItem, setShowAddItem] = useState(false);
@@ -216,6 +218,21 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
     await deleteTier(tierId);
     setTiers(prev => prev.filter(t => t.id !== tierId));
   };
+
+  // Provide tier editing sidebar for the global settings button
+  useEffect(() => {
+    setDefaultSidebarContent(
+      <TierEditorSidebar
+        tiers={tiers}
+        onAdd={handleAddTier}
+        onUpdate={handleUpdateTier}
+        onDelete={handleDeleteTier}
+      />
+    );
+    return () => setDefaultSidebarContent(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tiers]);
+
 
   return (
     <div className="tierlist-root flex flex-col min-h-screen">
