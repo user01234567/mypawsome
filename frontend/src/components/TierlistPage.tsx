@@ -8,6 +8,7 @@ import {
   updateItemTier,
   castVote,
   addItemToTierlist,
+  getCurrentUser,
 } from '../api';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import html2canvas from 'html2canvas';
@@ -44,12 +45,21 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
   const { id } = useParams<{ id: string }>();
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [items, setItems] = useState<ItemWithVotes[]>([]);
+  const [isCreator, setIsCreator] = useState(false);
 
   // Load tierlist details and items on mount
   useEffect(() => {
     async function load() {
       if (!id) return;
-      const tl = await fetchTierlistDetail(Number(id));
+      const [tl, u] = await Promise.all([
+        fetchTierlistDetail(Number(id)),
+        getCurrentUser(),
+      ]);
+      if (!u) {
+        window.location.href = `${BACKEND_URL}/auth/login`;
+        return;
+      }
+      setIsCreator(u.id === tl.creator_id);
       setTierlistName(tl.name ?? null); // set the name from backend
       setTiers(tl.tiers.sort((a, b) => a.position - b.position));
       const itms = await fetchItems(Number(id));
@@ -93,7 +103,7 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
 
   // Drag and drop logic
   const onDragEnd = async (result: DropResult) => {
-    if (!result.destination) return;
+    if (!isCreator || !result.destination) return;
 
     const itemId = parseInt(result.draggableId);
     const sourceTierId =
@@ -222,6 +232,7 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
                                 draggableId={it.id.toString()}
                                 index={index}
                                 key={it.id}
+                                isDragDisabled={!isCreator}
                               >
                                 {(providedDr) => (
                                   <div
@@ -276,6 +287,7 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
                             draggableId={it.id.toString()}
                             index={index}
                             key={it.id}
+                            isDragDisabled={!isCreator}
                           >
                             {(providedDr) => (
                               <div
