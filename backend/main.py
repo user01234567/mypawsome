@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
 from fastapi import UploadFile, File, Form, Depends, HTTPException
-from sqlalchemy import select, insert
+from sqlalchemy import select, insert, delete, update, text
 import os
 from uuid import uuid4
 from fastapi.staticfiles import StaticFiles
@@ -23,7 +23,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
-from sqlalchemy import create_engine, text, insert, select
+from sqlalchemy import create_engine
 from authlib.integrations.starlette_client import OAuth
 from fastapi.middleware.cors import CORSMiddleware
 # Import database & models
@@ -269,6 +269,71 @@ async def get_tierlist(tierlist_id: int = FPath(..., description="ID of the tier
         raise HTTPException(status_code=404, detail="Tierlist not found.")
     tier_rows = await database.fetch_all(select(tiers).where(tiers.c.tierlist_id == tierlist_id).order_by(tiers.c.position))
     return {"id": tl["id"], "name": tl["name"], "creator_id": tl["creator_id"], "tiers": [dict(r) for r in tier_rows]}
+
+# --- Tier management ---
+
+@app.post("/tierlists/{tierlist_id}/tiers")
+async def create_tier(
+    tierlist_id: int,
+    payload: dict = Body(...),
+    current_user: dict = Depends(get_current_user),
+):
+    if not await database.fetch_one(select(tierlists.c.id).where(tierlists.c.id == tierlist_id)):
+        raise HTTPException(status_code=404, detail="Tierlist not found.")
+    name = payload.get("name")
+    colour = payload.get("colour")
+    if not name or not colour:
+        raise HTTPException(status_code=400, detail="'name' and 'colour' required.")
+    max_row = await database.fetch_one(
+        select(text("COALESCE(MAX(position), -1) AS maxpos")).where(tiers.c.tierlist_id == tierlist_id)
+    )
+    next_pos = (max_row["maxpos"] if max_row and max_row["maxpos"] is not None else -1) + 1
+    new_id = await database.execute(
+        insert(tiers).values(tierlist_id=tierlist_id, name=name, colour=colour, position=next_pos)
+    )
+    row = await database.fetch_one(select(tiers).where(tiers.c.id == new_id))
+    return dict(row)
+
+
+@app.patch("/tiers/{tier_id}")
+async def update_tier(
+    tier_id: int,
+    payload: dict = Body(...),
+    current_user: dict = Depends(get_current_user),
+):
+    tier = await database.fetch_one(select(tiers).where(tiers.c.id == tier_id))
+    if not tier:
+        raise HTTPException(status_code=404, detail="Tier not found.")
+    updates = {}
+    if "name" in payload:
+        updates["name"] = payload["name"]
+    if "colour" in payload:
+        updates["colour"] = payload["colour"]
+    if updates:
+        await database.execute(tiers.update().where(tiers.c.id == tier_id).values(**updates))
+    updated = await database.fetch_one(select(tiers).where(tiers.c.id == tier_id))
+    return dict(updated)
+
+
+@app.delete("/tiers/{tier_id}")
+async def delete_tier(
+    tier_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    tier = await database.fetch_one(select(tiers).where(tiers.c.id == tier_id))
+    if not tier:
+        raise HTTPException(status_code=404, detail="Tier not found.")
+    tierlist_id = tier["tierlist_id"]
+    position = tier["position"]
+    await database.execute(tiers.delete().where(tiers.c.id == tier_id))
+    # Reorder remaining tiers
+    remaining = await database.fetch_all(
+        select(tiers).where(tiers.c.tierlist_id == tierlist_id).order_by(tiers.c.position)
+    )
+    for idx, t in enumerate(remaining):
+        if t["position"] != idx:
+            await database.execute(tiers.update().where(tiers.c.id == t["id"]).values(position=idx))
+    return {"status": "deleted"}
 
 @app.post("/tierlists/{tierlist_id}/items")
 async def add_item(
