@@ -8,11 +8,14 @@ import {
   updateItem,
   castVote,
   addItemToTierlist,
+  getCurrentUser,
 } from '../api';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import html2canvas from 'html2canvas';
 import AddItemModal from './AddItemModal';
-import { TopbarContext } from '../App';
+import { TopbarContext, SidebarContext } from '../App';
+import TierEditorSidebar from './TierEditorSidebar';
+import { createTier, updateTier, deleteTier } from '../api';
 
 interface TierlistPageProps {
   user: any;
@@ -34,6 +37,7 @@ function hexToRgba(hex: string, alpha = 0.15) {
 const BACKEND_URL = "http://192.168.178.249:13371";
 const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
   const { setTopbarContent } = useContext(TopbarContext);
+  const { openSidebar, closeSidebar } = useContext(SidebarContext);
 
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [showAddItem, setShowAddItem] = useState(false);
@@ -41,12 +45,21 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
   const { id } = useParams<{ id: string }>();
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [items, setItems] = useState<ItemWithVotes[]>([]);
+  const [isCreator, setIsCreator] = useState(false);
 
   // Load tierlist details and items on mount
   useEffect(() => {
     async function load() {
       if (!id) return;
-      const tl = await fetchTierlistDetail(Number(id));
+      const [tl, u] = await Promise.all([
+        fetchTierlistDetail(Number(id)),
+        getCurrentUser(),
+      ]);
+      if (!u) {
+        window.location.href = `${BACKEND_URL}/auth/login`;
+        return;
+      }
+      setIsCreator(u.id === tl.creator_id);
       setTierlistName(tl.name ?? null); // set the name from backend
       setTiers(tl.tiers.sort((a, b) => a.position - b.position));
       const itms = await fetchItems(Number(id));
@@ -68,6 +81,14 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
         {/* Right: Actions */}
         <div className="tierlist-actions flex gap-3 ml-auto">
           <button onClick={handleExport}>Export as PNG</button>
+          <button onClick={() => openSidebar(
+            <TierEditorSidebar
+              tiers={tiers}
+              onAdd={handleAddTier}
+              onUpdate={handleUpdateTier}
+              onDelete={handleDeleteTier}
+            />
+          )}>Edit Tiers</button>
           <button className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded"
             onClick={() => setShowAddItem(true)}
           >
@@ -82,7 +103,8 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
 
   // Drag and drop logic
   const onDragEnd = async (result: DropResult) => {
-    if (!result.destination) return;
+
+    if (!isCreator || !result.destination) return;
 
     const itemId = parseInt(result.draggableId);
     const sourceTierId =
@@ -97,6 +119,7 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
     const destIndex = result.destination.index;
 
     let updatedItems: ItemWithVotes[] = [];
+
     setItems((prev) => {
       const grouped: Record<string, ItemWithVotes[]> = {};
       prev.forEach((it) => {
@@ -111,6 +134,7 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
       const [moved] = grouped[srcKey].splice(result.source.index, 1);
       moved.tier_id = destTierId;
       grouped[dstKey].splice(destIndex, 0, moved);
+
 
       updatedItems = Object.values(grouped).flat();
 
@@ -155,7 +179,11 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
   const handleExport = async () => {
     const el = document.getElementById('tierlist-export');
     if (!el) return;
-    const canvas = await html2canvas(el);
+    const canvas = await html2canvas(el, {
+      useCORS: true,
+      ignoreElements: (element) =>
+        element.classList?.contains('unassigned-sticky-row'),
+    });
     const dataUrl = canvas.toDataURL('image/png');
     const link = document.createElement('a');
     link.href = dataUrl;
@@ -171,6 +199,22 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
     const itms = await fetchItems(Number(id));
     setItems(itms.map((it) => ({ ...it, votingEnabled: false })));
     setShowAddItem(false);
+  };
+
+  const handleAddTier = async () => {
+    if (!id) return;
+    const newTier = await createTier(Number(id), 'New Tier', '#cccccc');
+    setTiers(prev => [...prev, newTier]);
+  };
+
+  const handleUpdateTier = async (tierId: number, data: { name?: string; colour?: string }) => {
+    const updated = await updateTier(tierId, data);
+    setTiers(prev => prev.map(t => t.id === tierId ? updated : t));
+  };
+
+  const handleDeleteTier = async (tierId: number) => {
+    await deleteTier(tierId);
+    setTiers(prev => prev.filter(t => t.id !== tierId));
   };
 
   return (
@@ -213,6 +257,7 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
                                 draggableId={it.id.toString()}
                                 index={index}
                                 key={it.id}
+                                isDragDisabled={!isCreator}
                               >
                                 {(providedDr) => (
                                   <div
@@ -226,6 +271,7 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
                                         src={BACKEND_URL + (it.preview_url || it.image_url)}
                                         alt={it.name}
                                         className="item-image"
+                                        crossOrigin="anonymous"
                                         onClick={() =>
                                           setLightboxImage(BACKEND_URL + it.image_url)
                                         }
@@ -267,6 +313,7 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
                             draggableId={it.id.toString()}
                             index={index}
                             key={it.id}
+                            isDragDisabled={!isCreator}
                           >
                             {(providedDr) => (
                               <div
@@ -280,6 +327,7 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
                                     src={BACKEND_URL + (it.preview_url || it.image_url)}
                                     alt={it.name}
                                     className="item-image"
+                                    crossOrigin="anonymous"
                                     onClick={() =>
                                       setLightboxImage(BACKEND_URL + it.image_url)
                                     }
@@ -318,6 +366,7 @@ const TierlistPage: React.FC<TierlistPageProps> = ({ user }) => {
             src={lightboxImage}
             alt="Big Preview"
             className="max-h-[90vh] max-w-[90vw] rounded-lg shadow-lg"
+            crossOrigin="anonymous"
             onClick={(e) => e.stopPropagation()}
           />
         </div>

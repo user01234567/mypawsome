@@ -86,3 +86,18 @@ export async function addItemToTierlist(tierlistId: number, formData: FormData) 
   });
   return res.data;
 }
+
+export async function createTier(tierlistId: number, name: string, colour: string) {
+  const res = await api.post(`/tierlists/${tierlistId}/tiers`, { name, colour });
+  return res.data as Tier;
+}
+
+export async function updateTier(tierId: number, data: { name?: string; colour?: string }) {
+  const res = await api.patch(`/tiers/${tierId}`, data);
+  return res.data as Tier;
+}
+
+export async function deleteTier(tierId: number) {
+  const res = await api.delete(`/tiers/${tierId}`);
+  return res.data as { status: string };
+}
